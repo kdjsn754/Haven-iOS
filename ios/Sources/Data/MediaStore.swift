@@ -45,41 +45,6 @@ final class ImageCache {
         return image
     }
 
-    /// Quick Look 只认「真实文件 + 可识别的扩展名」，缓存里存的是无扩展名的哈希，
-    /// 所以这里把原图落到临时目录再返回 URL。优先复用磁盘缓存，避免点开时重新下载。
-    func previewFile(for url: String, name: String) async -> URL? {
-        guard let remote = URL(string: url) else { return nil }
-        let ext = remote.pathExtension.isEmpty ? "jpg" : remote.pathExtension.lowercased()
-
-        let data: Data
-        if let cachedData = try? Data(contentsOf: fileURL(url)) {
-            data = cachedData
-        } else {
-            var request = URLRequest(url: remote)
-            request.setValue("Haven/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
-            request.timeoutInterval = 30
-            guard let response = try? await URLSession.shared.data(for: request) else { return nil }
-            data = response.0
-            guard !data.isEmpty else { return nil }
-            try? data.write(to: fileURL(url))
-            if let image = UIImage(data: data) {
-                memory.setObject(image, forKey: url as NSString)
-            }
-        }
-
-        let folder = FileManager.default.temporaryDirectory
-            .appendingPathComponent("HavenPreview", isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let target = folder.appendingPathComponent("\(name).\(ext)")
-        if FileManager.default.fileExists(atPath: target.path) { return target }
-        do {
-            try data.write(to: target, options: .atomic)
-        } catch {
-            return nil
-        }
-        return target
-    }
-
     func clear() {
         memory.removeAllObjects()
         try? FileManager.default.removeItem(at: dir)

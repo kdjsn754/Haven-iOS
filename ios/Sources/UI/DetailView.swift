@@ -16,8 +16,7 @@ struct DetailView: View {
     @State private var errorMessage: String?
     @State private var loading = true
     @State private var saving = false
-    @State private var viewer: ViewerPayload?
-    @State private var preparingViewer = false
+    @State private var showFullscreen = false
 
     private var palette: Palette { Palette(dark: scheme == .dark) }
     private var isFavorite: Bool { favorites.isFavorite(id) }
@@ -67,8 +66,10 @@ struct DetailView: View {
         // 返回交给系统导航栏：原生返回按钮 + 原生侧滑手势，页面里不再画第二套按钮。
         .background(SwipeBackEnabler())
         .task(id: id) { await load() }
-        .fullScreenCover(item: $viewer) { payload in
-            QuickLookViewer(url: payload.url, title: payload.title)
+        .fullScreenCover(isPresented: $showFullscreen) {
+            if let item = wallpaper ?? preview {
+                FullscreenViewer(url: item.path)
+            }
         }
     }
 
@@ -92,8 +93,13 @@ struct DetailView: View {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
-            Task { await openViewer() }
+            if settingImageReady { showFullscreen = true }
         }
+    }
+
+    private var settingImageReady: Bool {
+        let item = wallpaper ?? preview
+        return item != nil
     }
 
     // MARK: 操作行
@@ -273,22 +279,6 @@ struct DetailView: View {
         .padding(.top, 16)
     }
 
-    /// 点大图 → 交给系统原生查看器。原图一般已随详情页加载进了缓存，
-    /// 命中时直接开；未命中则等下载完成再开。
-    @MainActor
-    private func openViewer() async {
-        guard !preparingViewer, let item = wallpaper ?? preview else { return }
-        preparingViewer = true
-        defer { preparingViewer = false }
-
-        let name = "wallhaven-\(item.id)"
-        guard let file = await ImageCache.shared.previewFile(for: item.path, name: name) else {
-            toasts.show("原图还没准备好，请稍后再试")
-            return
-        }
-        viewer = ViewerPayload(id: item.id, url: file, title: name)
-    }
-
     // MARK: 动作
 
     private func toggleFavorite() {
@@ -344,11 +334,109 @@ struct DetailView: View {
     }
 }
 
-// MARK: - 查看器载荷
+// MARK: - 全屏查看
 
-/// fullScreenCover(item:) 需要 Identifiable
-private struct ViewerPayload: Identifiable {
-    let id: String      // 壁纸 id
-    let url: URL        // 本地临时文件
-    let title: String
+struct FullscreenViewer: View {
+    let url: String
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var image: UIImage?
+    @State private var scale: CGFloat = 1
+    @State private var baseScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var baseOffset: CGSize = .zero
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .scaleEffect(scale)
+                    .offset(offset)
+                    .gesture(dragGesture)
+                    .simultaneousGesture(magnifyGesture)
+                    .onTapGesture(count: 2) { toggleZoom() }
+                    .onTapGesture { if scale <= 1.01 { dismiss() } }
+            } else {
+                ProgressView()
+                    .tint(.white)
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.white)
+                            .frame(width: 42, height: 42)
+                            .background(Color.white.opacity(0.14))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 6)
+        }
+        .statusBarHidden(true)
+        .task {
+            image = await ImageCache.shared.load(url)
+        }
+    }
+
+    private var magnifyGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                scale = min(max(baseScale * value, 1), 6)
+            }
+            .onEnded { _ in
+                baseScale = scale
+                if scale <= 1.01 { resetTransform() }
+            }
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                guard scale > 1 else { return }
+                offset = CGSize(
+                    width: baseOffset.width + value.translation.width,
+                    height: baseOffset.height + value.translation.height
+                )
+            }
+            .onEnded { _ in
+                baseOffset = offset
+            }
+    }
+
+    private func toggleZoom() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            if scale > 1.2 {
+                scale = 1
+                baseScale = 1
+                offset = .zero
+                baseOffset = .zero
+            } else {
+                scale = 2.5
+                baseScale = 2.5
+            }
+        }
+    }
+
+    private func resetTransform() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            scale = 1
+            baseScale = 1
+            offset = .zero
+            baseOffset = .zero
+        }
+    }
 }
