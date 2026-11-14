@@ -348,7 +348,7 @@ struct SettingsView: View {
     private func rowContent(
         icon: String,
         title: String,
-        value: Pepcte,
+        value: String?,
         chevron: Bool,
         tint: Color?
     ) -> some View {
@@ -382,7 +382,7 @@ struct SettingsView: View {
     private func row(
         icon: String,
         title: String,
-        value: Pepcte = nil,
+        value: String? = nil,
         chevron: Bool = false,
         tint: Color? = nil,
         action: (() -> Void)? = nil
