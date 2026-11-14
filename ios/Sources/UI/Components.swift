@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - 自动换行布局（标签流 / 筛选胶囊）
 
@@ -93,6 +94,73 @@ struct CircleIconButton: View {
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - 普通键盘输入框（API 密钥）
+
+/// 用 UITextField 包一层，专门避开系统「密码键盘」：
+/// - 不走 secure entry，不会弹「自动填充密码 / 使用强密码」那一套
+/// - textContentType 清空，避免 iOS 把这一格识别成密码栏
+/// - ASCII 键盘，关掉联想、纠错、智能标点，粘贴 48 位十六进制密钥不会被打断
+struct KeyField: UIViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var textColor: UIColor
+    var placeholderColor: UIColor
+
+    func makeUIView(context: Context) -> UITextField {
+        let field = UITextField()
+        field.delegate = context.coordinator
+        field.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.editingChanged(_:)),
+            for: .editingChanged
+        )
+        field.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        field.keyboardType = .asciiCapable
+        field.autocapitalizationType = .none
+        field.autocorrectionType = .no
+        field.spellCheckingType = .no
+        field.smartQuotesType = .no
+        field.smartDashesType = .no
+        field.smartInsertDeleteType = .no
+        field.returnKeyType = .done
+        field.clearButtonMode = .never
+        field.isSecureTextEntry = false
+        field.textContentType = UITextContentType(rawValue: "")
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+
+    func updateUIView(_ field: UITextField, context: Context) {
+        context.coordinator.parent = self
+        if field.text != text { field.text = text }
+        field.textColor = textColor
+        field.attributedPlaceholder = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .foregroundColor: placeholderColor,
+                .font: UIFont.systemFont(ofSize: 14),
+            ]
+        )
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: KeyField
+
+        init(_ parent: KeyField) { self.parent = parent }
+
+        @objc func editingChanged(_ field: UITextField) {
+            parent.text = field.text ?? ""
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            textField.resignFirstResponder()
+            return true
+        }
     }
 }
 
@@ -338,48 +406,6 @@ struct EmptyStateView: View {
         }
         .padding(.horizontal, 32)
         .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - 底部胶囊导航
-
-struct BottomBar: View {
-    let current: Tab
-    let onSelect: (Tab) -> Void
-
-    @Environment(\.colorScheme) private var scheme
-    private var palette: Palette { Palette(dark: scheme == .dark) }
-
-    var body: some View {
-        HStack(spacing: 2) {
-            tabButton(.home, icon: "house.fill", label: "首页")
-            tabButton(.settings, icon: "gearshape.fill", label: "设置")
-        }
-        .padding(4)
-        .background(palette.dark ? palette.surfaceAlt : palette.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(palette.line, lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.14), radius: 10, x: 0, y: 6)
-    }
-
-    private func tabButton(_ tab: Tab, icon: String, label: String) -> some View {
-        let selected = current == tab
-        return VStack(spacing: 2) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .medium))
-            Text(label)
-                .font(.system(size: 10, weight: selected ? .semibold : .medium))
-        }
-        .foregroundStyle(selected ? palette.onInk : palette.textTertiary)
-        .frame(width: 75)
-        .padding(.vertical, 6)
-        .background(selected ? palette.ink : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(Rectangle())
-        .onTapGesture { onSelect(tab) }
     }
 }
 

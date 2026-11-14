@@ -63,7 +63,17 @@ struct DetailView: View {
             }
         }
         .background(palette.background)
-        .overlay(alignment: .top) { topControls }
+        // 页面本身已经有系统导航栏的返回（玻璃圆钮）和下方操作行的收藏，
+        // 大图上不再叠一套半透明圆形按钮。
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .accessibilityLabel("返回")
+            }
+        }
         .task(id: id) { await load() }
         .fullScreenCover(isPresented: $showFullscreen) {
             if let item = wallpaper ?? preview {
@@ -99,34 +109,6 @@ struct DetailView: View {
     private var settingImageReady: Bool {
         let item = wallpaper ?? preview
         return item != nil
-    }
-
-    private var topControls: some View {
-        HStack {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .frame(width: 40, height: 40)
-                    .background(Color.black.opacity(0.34))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            Button(action: toggleFavorite) {
-                Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(isFavorite ? palette.like : Color.white)
-                    .frame(width: 40, height: 40)
-                    .background(Color.black.opacity(0.34))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 6)
     }
 
     // MARK: 操作行

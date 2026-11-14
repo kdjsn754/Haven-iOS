@@ -91,7 +91,7 @@ struct HomeView: View {
                         footer
                     }
                 }
-                .padding(.bottom, 96)
+                .padding(.bottom, 14)
             }
             .refreshable {
                 await home.refresh(apiKey: apiKey)

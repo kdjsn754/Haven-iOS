@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
@@ -9,7 +10,6 @@ struct SettingsView: View {
     let onOpenFavorites: () -> Void
 
     @State private var keyDraft = ""
-    @State private var showKey = false
     @State private var validating = false
     @State private var keyMessage: String?
     @State private var cacheSize = ""
@@ -89,7 +89,7 @@ struct SettingsView: View {
                 }
                 disclaimer
             }
-            .padding(.bottom, 110)
+            .padding(.bottom, 16)
         }
         .background(palette.background)
         .onAppear {
@@ -157,24 +157,36 @@ struct SettingsView: View {
             }
 
             HStack(spacing: 8) {
-                Group {
-                    if showKey {
-                        TextField("粘贴你的 API 密钥", text: $keyDraft)
-                    } else {
-                        SecureField("粘贴你的 API 密钥", text: $keyDraft)
+                // 普通键盘，不是系统密码键盘：不弹自动填充、不弹强密码建议。
+                KeyField(
+                    text: $keyDraft,
+                    placeholder: "粘贴你的 API 密钥",
+                    textColor: UIColor(palette.textPrimary),
+                    placeholderColor: UIColor(palette.textTertiary)
+                )
+                .frame(height: 20)
+
+                if !keyDraft.isEmpty {
+                    Button {
+                        keyDraft = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(palette.textTertiary)
                     }
+                    .buttonStyle(.plain)
                 }
-                .font(F.body())
-                .foregroundStyle(palette.textPrimary)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
 
                 Button {
-                    showKey.toggle()
+                    pasteKey()
                 } label: {
-                    Image(systemName: showKey ? "eye.slash" : "eye")
-                        .font(.system(size: 15))
-                        .foregroundStyle(palette.textTertiary)
+                    Text("粘贴")
+                        .font(F.label())
+                        .foregroundStyle(palette.textSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(palette.surfaceAlt)
+                        .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -334,6 +346,19 @@ struct SettingsView: View {
     }
 
     // MARK: 动作
+
+    private func pasteKey() {
+        guard let raw = UIPasteboard.general.string else {
+            toasts.show("剪贴板里没有内容")
+            return
+        }
+        let key = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            toasts.show("剪贴板里没有内容")
+            return
+        }
+        keyDraft = key
+    }
 
     private func validateKey() {
         let key = keyDraft.trimmingCharacters(in: .whitespacesAndNewlines)

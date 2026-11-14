@@ -66,7 +66,7 @@ struct FavoritesView: View {
                     EmptyStateView(
                         systemImage: "heart",
                         title: "还没有收藏",
-                        subtitle: "在任意壁纸上长按，或在详情页点右上角的心形"
+                        subtitle: "在任意壁纸上长按，或在详情页点「收藏」"
                     )
                     .frame(minHeight: max(geo.size.height * 0.65, 240))
                     .padding(.bottom, 40)
