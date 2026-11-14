@@ -28,6 +28,11 @@ enum Route: Hashable {
     case search
     case favorites
     case detail(String)
+    // 设置二级页
+    case settingsAccount
+    case settingsBrowse
+    case settingsStorage
+    case settingsAbout
 }
 
 struct RootView: View {
@@ -66,7 +71,7 @@ struct RootView: View {
                 .tag(Tab.home)
 
                 NavigationStack(path: $settingsPath) {
-                    SettingsView(onOpenFavorites: { settingsPath.append(.favorites) })
+                    SettingsView(onOpen: { settingsPath.append($0) })
                         .toolbar(.hidden, for: .navigationBar)
                         .navigationBarBackButtonHidden(true)
                         .navigationDestination(for: Route.self) { route in
@@ -138,6 +143,19 @@ struct RootView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .tabBar)
+
+        case .settingsAccount:
+            // 设置二级页保留系统导航栏（原生返回 + 侧滑），底栏继续显示。
+            AccountPage()
+
+        case .settingsBrowse:
+            BrowsePage(onOpen: { path.wrappedValue.append($0) })
+
+        case .settingsStorage:
+            StoragePage()
+
+        case .settingsAbout:
+            AboutPage()
 
         case .detail(let id):
             DetailView(
