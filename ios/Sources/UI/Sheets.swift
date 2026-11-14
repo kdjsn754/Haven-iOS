@@ -24,7 +24,6 @@ struct FilterSheet: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: M.sectionSpacing) {
                     categorySection
-                    puritySection
                     sortingSection
                     if draft.sorting == .toplist { topRangeSection }
                     resolutionSection
@@ -78,28 +77,6 @@ struct FilterSheet: View {
                     PillChip(title: item.1, selected: draft.categories.contains(item.0)) {
                         toggleCategory(item.0)
                     }
-                }
-            }
-        }
-    }
-
-    private var puritySection: some View {
-        section("分级") {
-            VStack(alignment: .leading, spacing: 8) {
-                FlowLayout(spacing: M.chipSpacing, lineSpacing: M.chipSpacing) {
-                    ForEach(FilterState.allPurities, id: \.0) { item in
-                        let locked = item.0 == "nsfw" && !settings.hasApiKey
-                        PillChip(title: item.1, selected: draft.purities.contains(item.0)) {
-                            guard !locked else { return }
-                            togglePurity(item.0)
-                        }
-                        .opacity(locked ? 0.45 : 1)
-                    }
-                }
-                if !settings.hasApiKey {
-                    Text("限制级内容需要先填写有效的 API 密钥")
-                        .font(.system(size: 11))
-                        .foregroundStyle(palette.textTertiary)
                 }
             }
         }
@@ -220,14 +197,6 @@ struct FilterSheet: View {
             if draft.categories.count > 1 { draft.categories.remove(key) }
         } else {
             draft.categories.insert(key)
-        }
-    }
-
-    private func togglePurity(_ key: String) {
-        if draft.purities.contains(key) {
-            if draft.purities.count > 1 { draft.purities.remove(key) }
-        } else {
-            draft.purities.insert(key)
         }
     }
 }

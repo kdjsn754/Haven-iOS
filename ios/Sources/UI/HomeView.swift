@@ -26,7 +26,6 @@ struct HomeView: View {
         .onAppear { submit() }
         .onChange(of: settings.filters) { _, _ in submit() }
         .onChange(of: settings.apiKey) { _, _ in submit() }
-        .onChange(of: settings.showNsfw) { _, _ in submit() }
         .sheet(isPresented: $showFilter) {
             FilterSheet(filters: settings.filters) { updated in
                 settings.filters = updated

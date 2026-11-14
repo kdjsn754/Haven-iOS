@@ -83,7 +83,6 @@ struct FilterState: Equatable {
     var sorting: Sorting = .dateAdded
     var topRange: String = "1M"
     var categories: Set<String> = ["general", "anime", "people"]
-    var purities: Set<String> = ["sfw"]
     var resolution: String = ""
     var ratio: String = ""
     var color: String = ""
@@ -92,36 +91,27 @@ struct FilterState: Equatable {
         ("general", "常规"), ("anime", "动漫"), ("people", "人物"),
     ]
 
-    static let allPurities: [(String, String)] = [
-        ("sfw", "安全"), ("sketchy", "粗略"), ("nsfw", "限制"),
-    ]
-
     var categoryParam: String {
         let bits = ["general", "anime", "people"].map { categories.contains($0) ? "1" : "0" }.joined()
         return bits == "000" ? "111" : bits
     }
 
-    var purityParam: String {
-        let bits = ["sfw", "sketchy", "nsfw"].map { purities.contains($0) ? "1" : "0" }.joined()
-        return bits == "000" ? "100" : bits
-    }
-
     var hasFilters: Bool {
         categories != ["general", "anime", "people"]
-            || purities != ["sfw"]
             || !resolution.isEmpty
             || !ratio.isEmpty
             || !color.isEmpty
     }
 
-    /// 没有 API Key 时强制 100（只安全内容），否则接口直接 401。
+    /// 应用不做分级过滤：有密钥就始终 111（安全 + 粗略 + 限制级全给），
+    /// 没有密钥时 Wallhaven 只允许 100，填 111 会直接 401。
     func toParams(query: String = "", apiKey: String = "") -> FeedParams {
         FeedParams(
             query: query,
             sorting: sorting,
             topRange: topRange,
             categories: categoryParam,
-            purity: apiKey.isEmpty ? "100" : purityParam,
+            purity: apiKey.isEmpty ? "100" : "111",
             resolution: resolution,
             ratio: ratio,
             color: color
@@ -133,7 +123,6 @@ struct FilterState: Equatable {
             "sorting": sorting.rawValue,
             "top_range": topRange,
             "categories": Array(categories),
-            "purities": Array(purities),
             "resolution": resolution,
             "ratio": ratio,
             "color": color,
@@ -146,7 +135,6 @@ struct FilterState: Equatable {
         if let raw = json["sorting"] as? String, let s = Sorting(rawValue: raw) { state.sorting = s }
         if let top = json["top_range"] as? String, !top.isEmpty { state.topRange = top }
         if let cats = json["categories"] as? [String], !cats.isEmpty { state.categories = Set(cats) }
-        if let pur = json["purities"] as? [String], !pur.isEmpty { state.purities = Set(pur) }
         if let res = json["resolution"] as? String { state.resolution = res }
         if let ratio = json["ratio"] as? String { state.ratio = ratio }
         if let color = json["color"] as? String { state.color = color }

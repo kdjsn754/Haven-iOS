@@ -78,9 +78,6 @@ final class AppSettings: ObservableObject {
     @Published var apiKey: String {
         didSet { KeychainStore.set(apiKey, for: "api_key") }
     }
-    @Published var showNsfw: Bool {
-        didSet { defaults.set(showNsfw, forKey: "show_nsfw") }
-    }
     @Published var columns: Int {
         didSet { defaults.set(columns, forKey: "columns") }
     }
@@ -105,7 +102,6 @@ final class AppSettings: ObservableObject {
 
     init() {
         apiKey = KeychainStore.string(for: "api_key")
-        showNsfw = defaults.bool(forKey: "show_nsfw")
         let savedColumns = defaults.integer(forKey: "columns")
         columns = savedColumns == 3 ? 3 : 2
         theme = ThemeMode(rawValue: defaults.string(forKey: "theme_mode") ?? "") ?? .system
@@ -124,13 +120,10 @@ final class AppSettings: ObservableObject {
         apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 统一出口：没有密钥、或关掉了「显示限制级」时，把 nsfw 从分级位里剔掉。
+    /// 统一出口：不做分级过滤，有密钥就放开全部内容（含限制级）；
+    /// 没密钥时接口只认 100，交给 toParams 降级。
     func params(query: String = "") -> FeedParams {
-        var state = filters
-        if !hasApiKey || !showNsfw {
-            state.purities.remove("nsfw")
-        }
-        return state.toParams(query: query, apiKey: hasApiKey ? trimmedKey : "")
+        filters.toParams(query: query, apiKey: hasApiKey ? trimmedKey : "")
     }
 
     func addRecent(_ keyword: String) {
