@@ -83,6 +83,8 @@ struct FilterState: Equatable {
     var sorting: Sorting = .dateAdded
     var topRange: String = "1M"
     var categories: Set<String> = ["general", "anime", "people"]
+    /// 默认三档全开；用户自己取消的就按取消的来。
+    var purities: Set<String> = ["sfw", "sketchy", "nsfw"]
     var resolution: String = ""
     var ratio: String = ""
     var color: String = ""
@@ -91,28 +93,38 @@ struct FilterState: Equatable {
         ("general", "常规"), ("anime", "动漫"), ("people", "人物"),
     ]
 
+    static let allPurities: [(String, String)] = [
+        ("sfw", "安全"), ("sketchy", "粗略"), ("nsfw", "限制"),
+    ]
+
     var categoryParam: String {
         let bits = ["general", "anime", "people"].map { categories.contains($0) ? "1" : "0" }.joined()
         return bits == "000" ? "111" : bits
     }
 
+    /// 一个都没选时回退到 111（三档全给），避免用户把选项点空后拿不到任何内容。
+    var purityParam: String {
+        let bits = ["sfw", "sketchy", "nsfw"].map { purities.contains($0) ? "1" : "0" }.joined()
+        return bits == "000" ? "111" : bits
+    }
+
     var hasFilters: Bool {
         categories != ["general", "anime", "people"]
+            || purities != ["sfw", "sketchy", "nsfw"]
             || !resolution.isEmpty
             || !ratio.isEmpty
             || !color.isEmpty
     }
 
-    /// 应用不做分级过滤：始终 111（安全 + 粗略 + 限制级全给）。
-    /// 实测无密钥时接口也接受 111，只是悄悄把 nsfw 剔掉，不会报错；
-    /// 填了密钥之后同一份请求就会带回限制级内容。
+    /// 分级按用户选的三档拼位（111 / 100 / 001 …）。
+    /// 没填密钥时接口会悄悄把 nsfw 剔掉，不报错；填了密钥同一份请求就能带回限制级。
     func toParams(query: String = "", apiKey: String = "") -> FeedParams {
         FeedParams(
             query: query,
             sorting: sorting,
             topRange: topRange,
             categories: categoryParam,
-            purity: "111",
+            purity: purityParam,
             resolution: resolution,
             ratio: ratio,
             color: color
@@ -124,6 +136,7 @@ struct FilterState: Equatable {
             "sorting": sorting.rawValue,
             "top_range": topRange,
             "categories": Array(categories),
+            "purities": Array(purities),
             "resolution": resolution,
             "ratio": ratio,
             "color": color,
@@ -136,6 +149,7 @@ struct FilterState: Equatable {
         if let raw = json["sorting"] as? String, let s = Sorting(rawValue: raw) { state.sorting = s }
         if let top = json["top_range"] as? String, !top.isEmpty { state.topRange = top }
         if let cats = json["categories"] as? [String], !cats.isEmpty { state.categories = Set(cats) }
+        if let pur = json["purities"] as? [String], !pur.isEmpty { state.purities = Set(pur) }
         if let res = json["resolution"] as? String { state.resolution = res }
         if let ratio = json["ratio"] as? String { state.ratio = ratio }
         if let color = json["color"] as? String { state.color = color }

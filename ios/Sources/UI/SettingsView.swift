@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var favorites: FavoritesStore
     @EnvironmentObject private var toasts: ToastCenter
+    @EnvironmentObject private var scrollTop: ScrollTopCenter
     @Environment(\.colorScheme) private var scheme
 
     let onOpenFavorites: () -> Void
@@ -25,9 +26,14 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                header
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Color.clear
+                        .frame(height: 0)
+                        .id("top")
+
+                    header
 
                 sectionLabel("账户")
                 apiKeyCard
@@ -46,8 +52,14 @@ struct SettingsView: View {
 
                 footer
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 28)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 28)
+            }
+            .onChange(of: scrollTop.settingsTick) { _, _ in
+                withAnimation(.easeOut(duration: 0.28)) {
+                    proxy.scrollTo("top", anchor: .top)
+                }
+            }
         }
         .background(palette.background)
         .onAppear {

@@ -40,6 +40,7 @@ struct RootView: View {
     @State private var tab: Tab = .home
     @State private var homePath: [Route] = []
     @State private var settingsPath: [Route] = []
+    @StateObject private var scrollTop = ScrollTopCenter()
 
     private var palette: Palette { Palette(dark: scheme == .dark) }
 
@@ -49,7 +50,7 @@ struct RootView: View {
 
             // 原生 TabView：iOS 26 起底部栏是系统的液态玻璃胶囊（Liquid Glass），
             // 自带浮动、折射、滚动收起等系统行为，不再自己画胶囊。
-            TabView(selection: $tab) {
+            TabView(selection: selection) {
                 NavigationStack(path: $homePath) {
                     HomeView(
                         onOpenSearch: { homePath.append(.search) },
@@ -76,18 +77,44 @@ struct RootView: View {
                 .tag(Tab.settings)
             }
             .tint(palette.textPrimary)
+            .background {
+                // 兜底：直接听底栏的点击，判断是不是"再点一次当前项"。
+                TabBarTapObserver { index in
+                    let target: Tab = index == 0 ? .home : .settings
+                    if target == tab {
+                        scrollTop.reselect(target)
+                    } else {
+                        tab = target
+                    }
+                }
+            }
 
             if let message = toasts.message {
                 ToastView(text: message)
                     .animation(.easeInOut(duration: 0.18), value: toasts.message)
             }
         }
+        .environmentObject(scrollTop)
         .onOpenURL { url in
             if let id = RootView.wallpaperId(from: url) {
                 tab = .home
                 homePath.append(.detail(id))
             }
         }
+    }
+
+    private var selection: Binding<Tab> {
+        Binding(
+            get: { tab },
+            set: { next in
+                if next == tab {
+                    // 再点一次当前项：把这张列表滚回顶部。
+                    scrollTop.reselect(next)
+                } else {
+                    tab = next
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -122,7 +149,6 @@ struct RootView: View {
             .toolbar(.visible, for: .navigationBar)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .tabBar)
         }
     }

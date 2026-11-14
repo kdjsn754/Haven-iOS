@@ -19,6 +19,7 @@ struct FavoritesView: View {
             content
         }
         .background(palette.background)
+        .background(SwipeBackEnabler())
         .confirmationDialog(
             "取消收藏？",
             isPresented: Binding(

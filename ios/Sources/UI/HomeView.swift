@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var home: FeedStore
     @EnvironmentObject private var favorites: FavoritesStore
+    @EnvironmentObject private var scrollTop: ScrollTopCenter
 
     @Environment(\.colorScheme) private var scheme
 
@@ -68,32 +69,43 @@ struct HomeView: View {
 
     private var content: some View {
         GeometryReader { geo in
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 0) {
-                    if home.items.isEmpty {
-                        stateArea
-                            .frame(minHeight: max(geo.size.height * 0.72, 260))
-                    } else {
-                        MasonryColumns(
-                            items: home.items,
-                            columns: settings.columns,
-                            width: geo.size.width - M.gridInset * 2,
-                            showMeta: settings.showMeta,
-                            downloadedIds: settings.downloadedIds,
-                            enableLoadMore: true,
-                            onOpen: { onOpenDetail($0.id) },
-                            onLongPress: { quick = $0 },
-                            onReachEnd: { home.loadMore(apiKey: apiKey) }
-                        )
-                        .padding(.horizontal, M.gridInset)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        Color.clear
+                            .frame(height: 0)
+                            .id("top")
 
-                        footer
+                        if home.items.isEmpty {
+                            stateArea
+                                .frame(minHeight: max(geo.size.height * 0.72, 260))
+                        } else {
+                            MasonryColumns(
+                                items: home.items,
+                                columns: settings.columns,
+                                width: geo.size.width - M.gridInset * 2,
+                                showMeta: settings.showMeta,
+                                downloadedIds: settings.downloadedIds,
+                                enableLoadMore: true,
+                                onOpen: { onOpenDetail($0.id) },
+                                onLongPress: { quick = $0 },
+                                onReachEnd: { home.loadMore(apiKey: apiKey) }
+                            )
+                            .padding(.horizontal, M.gridInset)
+
+                            footer
+                        }
+                    }
+                    .padding(.bottom, 14)
+                }
+                .refreshable {
+                    await home.refresh(apiKey: apiKey)
+                }
+                .onChange(of: scrollTop.homeTick) { _, _ in
+                    withAnimation(.easeOut(duration: 0.28)) {
+                        proxy.scrollTo("top", anchor: .top)
                     }
                 }
-                .padding(.bottom, 14)
-            }
-            .refreshable {
-                await home.refresh(apiKey: apiKey)
             }
         }
     }

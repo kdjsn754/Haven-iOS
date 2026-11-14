@@ -63,17 +63,8 @@ struct DetailView: View {
             }
         }
         .background(palette.background)
-        // 页面本身已经有系统导航栏的返回（玻璃圆钮）和下方操作行的收藏，
-        // 大图上不再叠一套半透明圆形按钮。
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(action: onBack) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .accessibilityLabel("返回")
-            }
-        }
+        // 返回交给系统导航栏：原生返回按钮 + 原生侧滑手势，页面里不再画第二套按钮。
+        .background(SwipeBackEnabler())
         .task(id: id) { await load() }
         .fullScreenCover(isPresented: $showFullscreen) {
             if let item = wallpaper ?? preview {

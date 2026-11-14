@@ -25,6 +25,7 @@ struct SearchView: View {
             content
         }
         .background(palette.background)
+        .background(SwipeBackEnabler())
         .onChange(of: settings.filters) { _, _ in
             if searched { runSearch(keepFocus: false) }
         }
