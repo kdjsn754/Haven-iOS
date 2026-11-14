@@ -1,0 +1,363 @@
+name: Build unsigned iOS IPA
+
+# ── 这个工作流在做什么 ────────────────────────────────────────────────────────
+# 在不签名的前提下打出 Haven 的 .ipa：XcodeGen 生成工程 → xcodebuild archive
+# → 手工拼 Payload → 上传 artifact。产物用于自签（SideStore / Sideloadly 等）。
+#
+# 契约来自 E:\WorkBuddyJob\src-ios\打包发布规范.md，移植时只动了这六处：
+#   1. 运行器白名单与默认值（未改）
+#   2. 定位工程 ios/project.yml（未改）
+#   3. 自愈锚点 Haven / com.haven.wallpapers
+#   4. 缓存 key —— 本工程无 SPM 二进制依赖，缓存两步整段删掉
+#   5. -project / -scheme / -archivePath / Payload 里的 app 名
+#   6. artifact 名 Haven-unsigned-ipa-${runner}
+#
+# 保留不动：未签名四件套、SDK 三档门槛、版本闸门、失败留证、concurrency、permissions。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "运行器（auto = xcode-27：macOS 27 + Xcode 27 / iOS 27 SDK，才没有上下黑边）"
+        type: choice
+        default: auto
+        options:
+          # GitHub 没有 macos-27 这个标签。Xcode 27 镜像是按工具链命名的：xcode-27。
+          - auto
+          - xcode-27       # macOS 27 + Xcode 27（iOS 27 SDK）
+          - macos-26       # Xcode 26 / iOS 26 SDK：能出包，但新机型上仍有黑边
+          - macos-15       # 旧 SDK，仅排查用
+          - macos-15-intel
+
+permissions:
+  contents: read
+
+# ⚠️ 这个文件里的 shell 变量紧挨中文/全角标点时必须写成 ${var}：
+# macOS 运行器的 /bin/bash 是 3.2，`${app}（` 会去找一个叫 `app\xef` 的变量，
+# 脚本开头有 set -u，于是 unbound variable 直接退出。
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XCODEGEN_VERSION: "2.46.0"
+  APP_NAME: Haven
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - name: 选择运行器
+        id: pick
+        env:
+          CHOICE: ${{ inputs.runner || 'auto' }}
+        run: |
+          set -eu
+          case "$CHOICE" in
+            auto)
+              json='["xcode-27"]'
+              note="auto：xcode-27（macOS 27 + Xcode 27 / iOS 27 SDK，界面才真正铺满）"
+              ;;
+            macos-27*)
+              echo "::warning::GitHub 没有 macos-27 标签，Xcode 27 镜像的标签是 xcode-27，已自动换成 xcode-27"
+              json='["xcode-27"]'
+              note="macos-27 → 已自动换成 xcode-27"
+              ;;
+            xcode-27*)
+              json='["xcode-27"]'
+              note="指定运行器：xcode-27（macOS 27 + Xcode 27）"
+              ;;
+            macos-14*)
+              echo "::warning::macos-14 系列已退役且容量已被削减，自动改用 xcode-27"
+              json='["xcode-27"]'
+              note="macos-14 → 已自动换成 xcode-27"
+              ;;
+            macos-15|macos-26|macos-15-intel|macos-26-intel)
+              if [ "${CHOICE#macos-15}" != "$CHOICE" ]; then
+                echo "::warning::macos-15 是旧 SDK，打出来的包在新机型上会上下黑边，仅建议排查用"
+              fi
+              if [ "$CHOICE" = "macos-26" ] || [ "$CHOICE" = "macos-26-intel" ]; then
+                echo "::warning::macos-26 只有 iOS 26 SDK，系统仍按兼容窗口运行，上下会留黑边"
+              fi
+              json="[\"$CHOICE\"]"
+              note="指定运行器：$CHOICE"
+              ;;
+            *)
+              echo "::warning::未知运行器 '$CHOICE'，回退到 xcode-27"
+              json='["xcode-27"]'
+              note="未知输入，回退 xcode-27"
+              ;;
+          esac
+          echo "matrix=$json" >> "$GITHUB_OUTPUT"
+          echo "本次构建目标：$note" >> "$GITHUB_STEP_SUMMARY"
+          echo "$note"
+
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    # 排队时间也算在 job 超时里，所以给足；真正的工时长由下面各 step 卡住
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 准备工具链（选 Xcode + 校验 SDK）
+        timeout-minutes: 14
+        run: |
+          set -u
+          w() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+          sw_vers | sed -n '1,3p'
+          echo "runner: ${RUNNER_NAME} / ${RUNNER_ARCH} / 标签 ${{ matrix.runner }}"
+
+          # ── 1. 挑版本最高的 Xcode（读 version.plist，不启动 Xcode）──────────
+          best=""
+          best_key=-1
+          for app in /Applications/Xcode*.app; do
+            [ -d "$app" ] || continue
+            name="$(basename "$app")"
+            v="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+                  "$app/Contents/version.plist" 2>/dev/null || true)"
+            [ -n "$v" ] || v="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+                  "$app/Contents/Info.plist" 2>/dev/null || echo 0)"
+            major="${v%%.*}"
+            rest="${v#*.}"
+            minor="${rest%%.*}"
+            case "$major" in ''|*[!0-9]*) major=0 ;; esac
+            case "$minor" in ''|*[!0-9]*) minor=0 ;; esac
+            raw=$(( major * 1000 + minor ))
+            case "$name" in
+              *beta*|*Beta*|*BETA*) key=$(( raw * 2 - 1 )) ;;
+              *)                    key=$(( raw * 2 )) ;;
+            esac
+            echo "  ${name} = ${v}（权重 ${key}）"
+            if [ "$key" -gt "$best_key" ]; then
+              best="$app"
+              best_key="$key"
+            fi
+          done
+          if [ -n "$best" ]; then
+            sudo xcode-select -s "$best"
+            echo "已切到 ${best}"
+          else
+            echo "::warning::/Applications 下没找到 Xcode*.app，沿用当前指向"
+          fi
+
+          # ── 2. 首次初始化 + 实际版本（只有这两条会慢，给上限）─────────────
+          sudo xcodebuild -license accept >/dev/null 2>&1 || true
+          w 420 sudo xcodebuild -runFirstLaunch || echo "::warning::-runFirstLaunch 失败或超时，继续"
+          echo "=== 实际生效的版本 ==="
+          w 300 xcodebuild -version || echo "::warning::xcodebuild -version 失败或超时"
+
+          # ── 3. iPhoneOS SDK 版本（读 SDKSettings.plist，读不到才问 xcrun）──
+          sdkp="$(xcode-select -p)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/SDKSettings.plist"
+          sdk="$(/usr/libexec/PlistBuddy -c 'Print :Version' "$sdkp" 2>/dev/null | tr -dc '0-9.')"
+          if [ -z "$sdk" ]; then
+            sdk="$(w 120 xcrun --sdk iphoneos --show-sdk-version 2>/dev/null | tr -dc '0-9.')"
+            echo "SDKSettings.plist 没读到，改用 xcrun：${sdk:-空}"
+          fi
+          if [ -z "$sdk" ]; then
+            echo "::error::取不到 iphoneos SDK 版本（plist 和 xcrun 都失败），无法确认会不会黑边。"
+            exit 1
+          fi
+          major="${sdk%%.*}"
+          rest="${sdk#*.}"
+          minor="${rest%%.*}"
+          case "$major" in ''|*[!0-9]*) major=0 ;; esac
+          case "$minor" in ''|*[!0-9]*) minor=0 ;; esac
+          echo "检测到 iphoneos SDK: ${sdk}"
+          if [ "$major" -lt 26 ]; then
+            echo "::error::当前 iOS SDK 是 ${sdk}（低于 26）。用它打出来的包在新机型上会被系统按兼容模式运行，屏幕上下有黑边。请改用 xcode-27 运行器。"
+            exit 1
+          elif [ "$major" -lt 27 ]; then
+            echo "::warning::iOS SDK 是 ${sdk}（低于 27）。系统会按「默认兼容」档运行，上下仍有黑边，换 xcode-27 才能铺满。"
+            {
+              echo ""
+              echo "> ⚠️ 本次打包用的是 iOS ${sdk} SDK（< 27）：系统会把界面放进旧尺寸兼容窗口，上下仍会留黑边。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$minor" -lt 1 ]; then
+            echo "::warning::iOS SDK 是 ${sdk}（27.0）。这一档是「过渡适配」，偶尔还能看到极细的边；27.1 起才完全铺满。"
+          else
+            echo "SDK 版本满足要求（${sdk} ≥ 27.1），界面可以完全铺满屏幕"
+          fi
+
+          # ── 4. 定位 iOS 工程（后面各步用 ${IOS_DIR}）───────────────────────
+          if [ -f ios/project.yml ]; then
+            echo "IOS_DIR=ios" >> "$GITHUB_ENV"
+          elif [ -f project.yml ]; then
+            echo "IOS_DIR=." >> "$GITHUB_ENV"
+          else
+            echo "::error::找不到 project.yml，请确认仓库根目录下是 ios/project.yml"
+            exit 1
+          fi
+
+      - name: 安装 XcodeGen
+        timeout-minutes: 6
+        run: |
+          set -eu
+          if command -v xcodegen >/dev/null 2>&1; then
+            echo "系统已有 XcodeGen：$(xcodegen --version)"
+            exit 0
+          fi
+          url="https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "下载 $url"
+          if curl -fsSL --retry 3 --retry-delay 2 --max-time 120 -o /tmp/xcodegen.zip "$url"; then
+            rm -rf /tmp/xg && mkdir -p /tmp/xg
+            unzip -q /tmp/xcodegen.zip -d /tmp/xg
+            bin="$(find /tmp/xg -type f -name xcodegen | head -n 1)"
+            if [ -n "$bin" ] && [ -x "$bin" ]; then
+              root="$(dirname "$(dirname "$bin")")"
+              sudo mkdir -p /opt/xcodegen
+              sudo cp -R "$root"/. /opt/xcodegen/
+              sudo ln -sf /opt/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
+            fi
+          fi
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            echo "::warning::预编译包没装上，退回 Homebrew"
+            HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: 生成 Xcode 工程
+        working-directory: ${{ env.IOS_DIR }}
+        timeout-minutes: 10
+        run: |
+          set -u
+          xcodegen generate
+          test -d Haven.xcodeproj || { echo "::error::xcodegen 没生成工程"; exit 1; }
+          pbx=Haven.xcodeproj/project.pbxproj
+
+          # ── 自愈：产物名 ────────────────────────────────────────────────
+          # 缺 PRODUCT_NAME 时归档产物会变成 Applications/.app，报
+          # 「Multiple commands produce '.../Applications/.app'」。
+          # 只能写进工程文件，不能在 xcodebuild 命令行全局覆盖。
+          if grep -q 'PRODUCT_NAME = "";' "$pbx"; then
+            echo "::warning::工程里的 PRODUCT_NAME 是空串，改成 Haven"
+            perl -pi -e 's/PRODUCT_NAME = "";/PRODUCT_NAME = Haven;/g' "$pbx"
+          fi
+          if ! grep -q 'PRODUCT_NAME = Haven;' "$pbx"; then
+            echo "::warning::生成出来的工程里没有 PRODUCT_NAME，这里按锚点补上"
+          fi
+          perl -0pi -e 's/(\n(\s*)PRODUCT_BUNDLE_IDENTIFIER = com\.haven\.wallpapers;)(?!\n\s*PRODUCT_NAME)/$1\n$2PRODUCT_NAME = Haven;/g' "$pbx"
+          pname_hits="$(grep -c 'PRODUCT_NAME = Haven;' "$pbx" || true)"
+          echo "工程里 PRODUCT_NAME = Haven 出现 ${pname_hits} 处"
+          if [ "${pname_hits:-0}" -eq 0 ]; then
+            echo "::error::没能把 PRODUCT_NAME 写进工程（锚点没命中）。请确认 ios/project.yml 的 settings.base 里有 PRODUCT_NAME: Haven 和 PRODUCT_BUNDLE_IDENTIFIER: com.haven.wallpapers。"
+            grep -m5 -n 'PRODUCT_BUNDLE_IDENTIFIER' "$pbx" || true
+            exit 1
+          fi
+
+          # ── 自愈：Info.plist 别同时当资源 ──────────────────────────────
+          if grep -q '/\* Info\.plist in Resources \*/' "$pbx"; then
+            echo "::warning::Info.plist 被当成了资源，删掉这两条引用（它只应作为 INFOPLIST_FILE）"
+            perl -ni -e 'print unless m{/\* Info\.plist in Resources \*/}' "$pbx"
+          fi
+          echo "Resources 阶段里还有没有 Info.plist：$(grep -c '/\* Info\.plist in Resources \*/' "$pbx" || true)"
+
+      - name: 构建（不签名）
+        working-directory: ${{ env.IOS_DIR }}
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild archive \
+            -project Haven.xcodeproj \
+            -scheme Haven \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Haven.xcarchive \
+            -derivedDataPath build/DerivedData \
+            -showBuildTimingSummary \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            2>&1 | tee build/archive.log
+
+      - name: 打包 IPA
+        working-directory: ${{ env.IOS_DIR }}
+        timeout-minutes: 5
+        run: |
+          set -eu
+          app="build/Haven.xcarchive/Products/Applications/Haven.app"
+          test -d "$app"
+
+          built_sdk="$(/usr/libexec/PlistBuddy -c 'Print :DTSDKName' "$app/Info.plist" 2>/dev/null || echo 未知)"
+          launch="$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen' "$app/Info.plist" 2>/dev/null || echo 缺失)"
+          echo "产物 DTSDKName: $built_sdk"
+          echo "产物 UILaunchScreen: $launch"
+          case "$launch" in
+            缺失|"") echo "::error::产物 Info.plist 里没有 UILaunchScreen，系统会把 App 当旧版小屏应用加黑边。" ; exit 1 ;;
+          esac
+
+          # ── 版本闸门 ────────────────────────────────────────────────────
+          built_ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist" 2>/dev/null || echo 未知)"
+          built_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist" 2>/dev/null || echo 未知)"
+          want_ver="$(awk '/^[[:space:]]*MARKETING_VERSION:/ {print $2; exit}' project.yml)"
+          want_build="$(awk '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ {print $2; exit}' project.yml)"
+          echo "产物版本: ${built_ver} (${built_build})"
+          echo "工程期望: ${want_ver} (${want_build})"
+          if [ -n "$want_ver" ] && [ "$built_ver" != "$want_ver" ]; then
+            echo "::error::产物里的版本是 ${built_ver}，project.yml 写的却是 ${want_ver}。Info.plist 里的 CFBundleShortVersionString 要写成 \$(MARKETING_VERSION)，版本号只改 project.yml 一处。"
+            exit 1
+          fi
+          if [ -n "$want_build" ] && [ "$built_build" != "$want_build" ]; then
+            echo "::error::产物里的 build 号是 ${built_build}，project.yml 写的却是 ${want_build}。"
+            exit 1
+          fi
+
+          rm -rf build/Payload
+          mkdir -p build/Payload
+          cp -R "$app" build/Payload/
+          rm -f build/Haven-unsigned.ipa
+          (cd build && /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload Haven-unsigned.ipa)
+          shasum -a 256 build/Haven-unsigned.ipa | tee build/ipa.sha256
+          size="$(du -h build/Haven-unsigned.ipa | cut -f1)"
+          sha="$(cut -d' ' -f1 build/ipa.sha256)"
+          xv="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+                 "$(xcode-select -p)/../version.plist" 2>/dev/null || echo 未知)"
+          {
+            echo "### 构建成功（${{ matrix.runner }}）"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "| --- | --- |"
+            echo "| 运行器 | \`${RUNNER_NAME}\` |"
+            echo "| 版本（产物 Info.plist） | \`${built_ver} (${built_build})\` |"
+            echo "| Xcode | \`${xv}\` |"
+            echo "| 产物 SDK（DTSDKName） | \`${built_sdk}\` |"
+            echo "| IPA 大小 | ${size} |"
+            echo "| SHA256 | \`${sha}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传 IPA
+        uses: actions/upload-artifact@v6
+        with:
+          name: Haven-unsigned-ipa-${{ matrix.runner }}
+          path: ${{ env.IOS_DIR }}/build/Haven-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 失败时上传日志
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ios-build-failure-${{ matrix.runner }}
+          path: ${{ env.IOS_DIR }}/build/archive.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: 失败提示
+        if: failure()
+        run: |
+          echo "::error::构建失败或超时，已上传 archive.log，先看里面最后一个 error: 行。"
+          echo "若全程停在 Queued（等机器），说明该标签的池子满：重跑一次，或改用默认的 auto。"
