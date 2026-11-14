@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
 
+/// 设置页：克制的分组列表。
+///
+/// 设计约定（避免"杂乱"）：
+///  · 一行只说一件事，行首不放图标，靠文字对齐形成竖线
+///  · 每张卡只有一个层级：无嵌套小方块、无胶囊、无彩色底
+///  · 开关/分段用系统控件，样式交给 iOS
+///  · 说明文字一律放在卡片下面的小灰字里，不塞进卡片内部
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var favorites: FavoritesStore
@@ -12,7 +19,7 @@ struct SettingsView: View {
 
     @State private var keyDraft = ""
     @State private var validating = false
-    @State private var keyMessage: String?
+    @State private var keyMessage = ""
     @State private var cacheSize = ""
     @State private var confirmClearFavorites = false
 
@@ -33,27 +40,37 @@ struct SettingsView: View {
                         .frame(height: 0)
                         .id("top")
 
-                    header
+                    Text("设置")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundStyle(palette.textPrimary)
+                        .padding(.leading, 2)
+                        .padding(.top, 10)
 
-                sectionLabel("账户")
-                apiKeyCard
+                    sectionLabel("账户")
+                    accountCard
+                    keyHint
 
-                sectionLabel("浏览")
-                browseCard
+                    sectionLabel("浏览")
+                    browseCard
 
-                sectionLabel("外观")
-                appearanceCard
+                    sectionLabel("外观")
+                    appearanceCard
 
-                sectionLabel("下载与存储")
-                storageCard
+                    sectionLabel("存储")
+                    storageCard
 
-                sectionLabel("关于")
-                aboutCard
+                    sectionLabel("关于")
+                    aboutCard
 
-                footer
-            }
+                    Text("Haven 是 Wallhaven.cc 的第三方客户端，与官方无关。壁纸版权归原作者所有。")
+                        .font(.system(size: 11))
+                        .foregroundStyle(palette.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 2)
+                        .padding(.top, 22)
+                }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 28)
+                .padding(.bottom, 30)
             }
             .onChange(of: scrollTop.settingsTick) { _, _ in
                 withAnimation(.easeOut(duration: 0.28)) {
@@ -81,74 +98,77 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: 头部
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("设置")
-                .font(F.display())
-                .foregroundStyle(palette.textPrimary)
-            Text("账户、浏览、外观与存储")
-                .font(.system(size: 12))
-                .foregroundStyle(palette.textTertiary)
-        }
-        .padding(.leading, 2)
-        .padding(.top, 12)
+    private var defaultKeyHint: String {
+        settings.hasApiKey
+            ? "已连接 Wallhaven，密钥保存在本机 Keychain"
+            : "未连接。密钥可选，填写后可浏览限制级内容"
     }
+
+    // MARK: 骨架
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: 12, weight: .medium))
             .foregroundStyle(palette.textTertiary)
             .padding(.leading, 2)
-            .padding(.top, 26)
-            .padding(.bottom, 9)
+            .padding(.top, 24)
+            .padding(.bottom, 8)
     }
 
     private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 0) {
             content()
         }
-        .background(palette.surfaceAlt)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(palette.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(palette.line, lineWidth: 1)
+        )
     }
 
     private var divider: some View {
         Rectangle()
             .fill(palette.line)
             .frame(height: 1)
-            .padding(.leading, 48)
+            .padding(.leading, 16)
+    }
+
+    /// 密钥说明：一行小灰字，右侧挂"获取密钥"链接，不占卡片空间。
+    private var keyHint: some View {
+        HStack(spacing: 8) {
+            Text(keyMessage.isEmpty ? defaultKeyHint : keyMessage)
+                .font(.system(size: 11))
+                .foregroundStyle(keyMessage.isEmpty ? palette.textTertiary : palette.like)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            if keyMessage.isEmpty {
+                Link("获取密钥", destination: URL(string: "https://wallhaven.cc/settings/account")!)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(palette.textSecondary)
+            }
+        }
+        .padding(.horizontal, 2)
+        .padding(.top, 9)
     }
 
     // MARK: 账户
 
-    private var apiKeyCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var accountCard: some View {
+        card {
             HStack(spacing: 10) {
-                Image(systemName: "key.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(palette.textTertiary)
-                    .frame(width: 22, alignment: .leading)
-                Text("API 密钥")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(palette.textPrimary)
-                Spacer(minLength: 8)
-                statusPill
-            }
-
-            // 普通键盘，不是系统密码键盘：不弹自动填充、不弹强密码建议。
-            HStack(spacing: 8) {
                 KeyField(
                     text: $keyDraft,
                     placeholder: "粘贴你的 API 密钥",
                     textColor: UIColor(palette.textPrimary),
                     placeholderColor: UIColor(palette.textTertiary)
                 )
-                .frame(height: 20)
+                .frame(height: 22)
 
                 if !keyDraft.isEmpty {
                     Button {
                         keyDraft = ""
+                        keyMessage = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
@@ -161,121 +181,76 @@ struct SettingsView: View {
                     pasteKey()
                 } label: {
                     Text("粘贴")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(palette.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(palette.surfaceAlt)
-                        .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .background(palette.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
 
-            HStack(spacing: 10) {
+            divider
+
+            Button {
+                validateKey()
+            } label: {
+                HStack(spacing: 8) {
+                    Text("验证并保存")
+                        .font(.system(size: 15))
+                        .foregroundStyle(palette.textPrimary)
+                    Spacer(minLength: 8)
+                    if validating {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    } else {
+                        Text(settings.hasApiKey ? "已连接" : "未连接")
+                            .font(.system(size: 14))
+                            .foregroundStyle(palette.textTertiary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 50)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(validating)
+
+            if settings.hasApiKey {
+                divider
                 Button {
-                    validateKey()
+                    removeKey()
                 } label: {
-                    HStack(spacing: 6) {
-                        if validating {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                                .tint(palette.onInk)
-                        }
-                        Text(validating ? "验证中…" : "保存并验证")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(palette.onInk)
+                    HStack {
+                        Text("移除密钥")
+                            .font(.system(size: 15))
+                            .foregroundStyle(palette.like)
+                        Spacer(minLength: 0)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(palette.ink)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .opacity(validating ? 0.65 : 1)
+                    .padding(.horizontal, 16)
+                    .frame(height: 50)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(validating)
-
-                if settings.hasApiKey {
-                    Button {
-                        removeKey()
-                    } label: {
-                        Text("移除")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(palette.like)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 11)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(palette.line, lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
             }
-
-            if let keyMessage {
-                Text(keyMessage)
-                    .font(.system(size: 12))
-                    .foregroundStyle(palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: 3) {
-                Text("密钥只保存在本机 Keychain。")
-                Link(
-                    "去获取 ↗",
-                    destination: URL(string: "https://wallhaven.cc/settings/account")!
-                )
-                .foregroundStyle(palette.textSecondary)
-            }
-            .font(.system(size: 11))
-            .foregroundStyle(palette.textTertiary)
         }
-        .padding(16)
-        .background(palette.surfaceAlt)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private var statusPill: some View {
-        let on = settings.hasApiKey
-        return HStack(spacing: 5) {
-            Circle()
-                .fill(on ? palette.downloaded : palette.textTertiary)
-                .frame(width: 6, height: 6)
-            Text(on ? "已连接" : "未连接")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(on ? palette.textSecondary : palette.textTertiary)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(palette.surface)
-        .clipShape(Capsule())
     }
 
     // MARK: 浏览
 
     private var browseCard: some View {
         card {
-            block(icon: "square.grid.2x2", title: "每行显示") {
-                segmented([(2, "两列"), (3, "三列")], selection: $settings.columns)
-            }
-            divider
-            switchRow(
-                icon: "info.circle",
-                title: "卡片角标",
-                subtitle: "卡片上的体积、浏览与收藏量",
-                isOn: $settings.showMeta
+            segmentedRow(
+                title: "每行显示",
+                width: 122,
+                options: [(2, "两列"), (3, "三列")],
+                selection: $settings.columns
             )
             divider
-            row(
-                icon: "heart",
-                title: "我的收藏",
-                value: "\(favorites.count) 张",
-                chevron: true
-            ) { onOpenFavorites() }
+            switchRow(title: "卡片角标", isOn: $settings.showMeta)
+            divider
+            row(title: "我的收藏", value: "\(favorites.count) 张", chevron: true) {
+                onOpenFavorites()
+            }
         }
     }
 
@@ -283,51 +258,35 @@ struct SettingsView: View {
 
     private var appearanceCard: some View {
         card {
-            block(icon: "circle.lefthalf.filled", title: "深浅模式") {
-                segmented(
-                    ThemeMode.allCases.map { ($0, $0.label) },
-                    selection: $settings.theme
-                )
-            }
+            segmentedRow(
+                title: "深浅模式",
+                width: 200,
+                options: ThemeMode.allCases.map { ($0, $0.label) },
+                selection: $settings.theme
+            )
         }
     }
 
-    // MARK: 下载与存储
+    // MARK: 存储
 
     private var storageCard: some View {
         card {
-            switchRow(
-                icon: "wifi",
-                title: "仅 Wi-Fi 下载",
-                subtitle: "仅作提醒，下载始终可用",
-                isOn: $settings.wifiOnly
-            )
+            switchRow(title: "仅 Wi-Fi 下载", isOn: $settings.wifiOnly)
             divider
-            row(icon: "photo.on.rectangle", title: "保存位置", value: "照片 / Haven")
+            row(title: "保存位置", value: "照片 / Haven")
             divider
-            row(
-                icon: "internaldrive",
-                title: "图片缓存",
-                value: cacheSize.isEmpty ? "已清空" : cacheSize,
-                chevron: true
-            ) { clearCache() }
+            row(title: "图片缓存", value: cacheSize.isEmpty ? "已清空" : cacheSize, chevron: true) {
+                clearCache()
+            }
             divider
-            row(
-                icon: "clock.arrow.circlepath",
-                title: "搜索历史",
-                value: "\(settings.recentSearches.count) 条",
-                chevron: true
-            ) {
+            row(title: "搜索历史", value: "\(settings.recentSearches.count) 条", chevron: true) {
                 settings.clearRecent()
                 toasts.show("搜索历史已清空")
             }
             divider
-            row(
-                icon: "trash",
-                title: "清空收藏",
-                value: "\(favorites.count) 张",
-                tint: palette.like
-            ) { confirmClearFavorites = true }
+            row(title: "清空收藏", value: "\(favorites.count) 张", tint: palette.like) {
+                confirmClearFavorites = true
+            }
         }
     }
 
@@ -335,45 +294,26 @@ struct SettingsView: View {
 
     private var aboutCard: some View {
         card {
-            row(icon: "app.badge", title: "版本", value: versionLabel)
+            row(title: "版本", value: versionLabel)
             divider
-            row(icon: "globe", title: "数据来源", value: "wallhaven.cc")
+            row(title: "数据来源", value: "wallhaven.cc")
             divider
             Link(destination: URL(string: "https://github.com/kdjsn754/Haven-iOS")!) {
-                rowContent(icon: "link", title: "源代码", value: "GitHub", chevron: true, tint: nil)
+                rowBody(title: "源代码", value: "GitHub", chevron: true, tint: nil)
             }
             .buttonStyle(.plain)
         }
     }
 
-    private var footer: some View {
-        Text("Haven 是 Wallhaven.cc 的第三方客户端，与 Wallhaven 官方无关。壁纸版权归原作者所有，仅供个人浏览与收藏。")
-            .font(.system(size: 11))
-            .foregroundStyle(palette.textTertiary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.leading, 2)
-            .padding(.top, 20)
-    }
-
     // MARK: 行
 
-    private func rowContent(
-        icon: String,
-        title: String,
-        value: String?,
-        chevron: Bool,
-        tint: Color?
-    ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(tint ?? palette.textTertiary)
-                .frame(width: 22, alignment: .leading)
+    private func rowBody(title: String, value: String, chevron: Bool, tint: Color?) -> some View {
+        HStack(spacing: 8) {
             Text(title)
                 .font(.system(size: 15))
                 .foregroundStyle(tint ?? palette.textPrimary)
             Spacer(minLength: 8)
-            if let value, !value.isEmpty {
+            if !value.isEmpty {
                 Text(value)
                     .font(.system(size: 14))
                     .foregroundStyle(palette.textTertiary)
@@ -386,111 +326,63 @@ struct SettingsView: View {
             }
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: 52)
+        .frame(minHeight: 50)
         .contentShape(Rectangle())
     }
 
     @ViewBuilder
     private func row(
-        icon: String,
         title: String,
-        value: String? = nil,
+        value: String = "",
         chevron: Bool = false,
         tint: Color? = nil,
         action: (() -> Void)? = nil
     ) -> some View {
         if let action {
             Button(action: action) {
-                rowContent(icon: icon, title: title, value: value, chevron: chevron, tint: tint)
+                rowBody(title: title, value: value, chevron: chevron, tint: tint)
             }
             .buttonStyle(.plain)
         } else {
-            rowContent(icon: icon, title: title, value: value, chevron: chevron, tint: tint)
+            rowBody(title: title, value: value, chevron: chevron, tint: tint)
         }
     }
 
-    private func switchRow(
-        icon: String,
-        title: String,
-        subtitle: String? = nil,
-        isOn: Binding<Bool>
-    ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(palette.textTertiary)
-                .frame(width: 22, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 15))
-                    .foregroundStyle(palette.textPrimary)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(palette.textTertiary)
-                }
-            }
+    private func switchRow(title: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 15))
+                .foregroundStyle(palette.textPrimary)
             Spacer(minLength: 8)
             Toggle("", isOn: isOn)
                 .labelsHidden()
-                .tint(palette.ink)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, subtitle == nil ? 0 : 10)
-        .frame(minHeight: 52)
+        .frame(minHeight: 50)
     }
 
-    private func block<Content: View>(
-        icon: String,
+    private func segmentedRow<T: Hashable>(
         title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(palette.textTertiary)
-                    .frame(width: 22, alignment: .leading)
-                Text(title)
-                    .font(.system(size: 15))
-                    .foregroundStyle(palette.textPrimary)
-                Spacer(minLength: 0)
-            }
-            content()
-                .padding(.leading, 32)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-    }
-
-    private func segmented<T: Hashable>(
-        _ options: [(T, String)],
+        width: CGFloat,
+        options: [(T, String)],
         selection: Binding<T>
     ) -> some View {
-        HStack(spacing: 4) {
-            ForEach(options.indices, id: \.self) { index in
-                let option = options[index]
-                let selected = selection.wrappedValue == option.0
-                Button {
-                    withAnimation(.easeInOut(duration: 0.16)) {
-                        selection.wrappedValue = option.0
-                    }
-                } label: {
-                    Text(option.1)
-                        .font(.system(size: 13, weight: selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? palette.onInk : palette.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(selected ? palette.ink : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                        .contentShape(Rectangle())
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.system(size: 15))
+                .foregroundStyle(palette.textPrimary)
+            Spacer(minLength: 8)
+            Picker(title, selection: selection) {
+                ForEach(options.indices, id: \.self) { index in
+                    Text(options[index].1).tag(options[index].0)
                 }
-                .buttonStyle(.plain)
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: width)
         }
-        .padding(4)
-        .background(palette.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 16)
+        .frame(minHeight: 52)
     }
 
     // MARK: 动作
@@ -506,12 +398,13 @@ struct SettingsView: View {
             return
         }
         keyDraft = key
+        keyMessage = ""
     }
 
     private func removeKey() {
         settings.apiKey = ""
         keyDraft = ""
-        keyMessage = nil
+        keyMessage = ""
         toasts.show("API 密钥已移除")
     }
 
@@ -522,7 +415,7 @@ struct SettingsView: View {
             return
         }
         validating = true
-        keyMessage = nil
+        keyMessage = ""
         Task {
             let error = await WallhavenAPI.shared.validateKey(key)
             validating = false
