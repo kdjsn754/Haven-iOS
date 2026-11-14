@@ -117,13 +117,16 @@ struct SettingsView: View {
                             endPoint: .center
                         )
                     )
-                Text("H")
-                    .font(.system(size: 33, weight: .bold, design: .serif))
-                    .italic()
+                // 用桌面图标那颗花体 H 的矢量字标，而不是系统 serif 斜体的「H」：
+                // 文字有行高与字面边距，视觉上会偏、会歪。
+                Image("BrandGlyph")
+                    .renderingMode(.template)
+                    .resizable()
                     .foregroundStyle(Color.white)
+                    .frame(width: 46, height: 46)
             }
             .frame(width: 60, height: 60)
-            .shadow(color: Color(hex: 0x1B8FB0).opacity(0.32), radius: 12, x: 0, y: 6)
+            .shadow(color: Color(hex: 0x1B8FB0).opacity(0.18), radius: 8, x: 0, y: 4)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("Haven")

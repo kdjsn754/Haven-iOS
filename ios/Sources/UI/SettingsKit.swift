@@ -61,7 +61,8 @@ struct SettingsIconTile: View {
                 .foregroundStyle(Color.white)
         }
         .frame(width: size, height: size)
-        .shadow(color: (tint.last ?? Color.clear).opacity(0.30), radius: 7, x: 0, y: 3)
+        // 一层很浅的本色投影：只是让色块浮起来一点，不能糊成光斑
+        .shadow(color: (tint.last ?? Color.clear).opacity(0.16), radius: 5, x: 0, y: 2)
     }
 }
 
