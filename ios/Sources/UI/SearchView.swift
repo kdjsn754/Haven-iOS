@@ -5,7 +5,6 @@ struct SearchView: View {
     @EnvironmentObject private var favorites: FavoritesStore
     @Environment(\.colorScheme) private var scheme
 
-    let onBack: () -> Void
     let onOpenDetail: (String) -> Void
 
     @StateObject private var results = FeedStore()
@@ -26,6 +25,17 @@ struct SearchView: View {
         }
         .background(palette.background)
         .background(SwipeBackEnabler())
+        .toolbar {
+            // 筛选放进系统导航栏：拿到原生玻璃圆钮、原生点击态与无障碍语义。
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showFilter = true
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease")
+                }
+                .accessibilityLabel("筛选")
+            }
+        }
         .onChange(of: settings.filters) { _, _ in
             if searched { runSearch(keepFocus: false) }
         }
@@ -45,17 +55,14 @@ struct SearchView: View {
 
     private var topRow: some View {
         HStack(spacing: 8) {
-            CircleIconButton(systemImage: "chevron.left", size: 40, iconSize: 16, action: onBack)
             Text("搜索")
                 .font(F.pageTitle())
                 .foregroundStyle(palette.textPrimary)
-            Spacer()
-            CircleIconButton(systemImage: "line.3.horizontal.decrease", size: 40, iconSize: 17, action: { showFilter = true })
+            Spacer(minLength: 0)
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 14)
+        .padding(.horizontal, 14)
         .padding(.top, 2)
-        .padding(.bottom, 8)
+        .padding(.bottom, 10)
     }
 
     private var searchField: some View {

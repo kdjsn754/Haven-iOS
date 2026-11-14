@@ -6,7 +6,6 @@ struct FavoritesView: View {
     @EnvironmentObject private var toasts: ToastCenter
     @Environment(\.colorScheme) private var scheme
 
-    let onBack: () -> Void
     let onOpenDetail: (String) -> Void
 
     @State private var pendingRemoval: Wallpaper?
@@ -42,22 +41,18 @@ struct FavoritesView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            CircleIconButton(systemImage: "chevron.left", size: 40, iconSize: 16, action: onBack)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("收藏")
-                    .font(F.pageTitle())
-                    .foregroundStyle(palette.textPrimary)
-                Text(favorites.count > 0 ? "\(favorites.count) 张壁纸" : "还是一片空白")
-                    .font(.system(size: 11))
-                    .foregroundStyle(palette.textTertiary)
-            }
-            Spacer()
+        VStack(alignment: .leading, spacing: 1) {
+            Text("收藏")
+                .font(F.pageTitle())
+                .foregroundStyle(palette.textPrimary)
+            Text(favorites.count > 0 ? "\(favorites.count) 张壁纸" : "还是一片空白")
+                .font(.system(size: 11))
+                .foregroundStyle(palette.textTertiary)
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
         .padding(.top, 2)
-        .padding(.bottom, 8)
+        .padding(.bottom, 10)
     }
 
     private var content: some View {

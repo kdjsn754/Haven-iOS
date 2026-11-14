@@ -126,23 +126,20 @@ struct RootView: View {
     private func destination(_ route: Route, path: Binding<[Route]>) -> some View {
         switch route {
         case .search:
-            SearchView(
-                onBack: { pop(path) },
-                onOpenDetail: { path.wrappedValue.append(.detail($0)) }
-            )
-            // 搜索页有自己的顶部行（返回 + 标题 + 筛选），系统导航栏要让位。
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationBarBackButtonHidden(true)
-            .toolbar(.hidden, for: .tabBar)
+            // 搜索页交回系统导航栏：返回按钮就是原生的液态玻璃圆钮，
+            // 右侧筛选也走原生 toolbar item，侧滑返回随系统一起生效。
+            SearchView(onOpenDetail: { path.wrappedValue.append(.detail($0)) })
+                .navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.visible, for: .navigationBar)
+                .toolbar(.hidden, for: .tabBar)
 
         case .favorites:
-            FavoritesView(
-                onBack: { pop(path) },
-                onOpenDetail: { path.wrappedValue.append(.detail($0)) }
-            )
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationBarBackButtonHidden(true)
-            .toolbar(.hidden, for: .tabBar)
+            FavoritesView(onOpenDetail: { path.wrappedValue.append(.detail($0)) })
+                .navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.visible, for: .navigationBar)
+                .toolbar(.hidden, for: .tabBar)
 
         case .settingsAccount:
             // 设置二级页保留系统导航栏（原生返回 + 侧滑），底栏继续显示。
