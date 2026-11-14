@@ -23,7 +23,9 @@ struct AccountPage: View {
     var body: some View {
         SettingsPage("账户") {
             SettingsCard {
-                HStack(spacing: 10) {
+                HStack(spacing: SettingsMetrics.iconGap) {
+                    SettingsIconTile(symbol: "key.horizontal.fill", tint: SettingsTint.blue)
+
                     KeyField(
                         text: $keyDraft,
                         placeholder: "粘贴你的 API 密钥",
@@ -62,7 +64,7 @@ struct AccountPage: View {
                     validateKey()
                 } label: {
                     HStack(spacing: SettingsMetrics.iconGap) {
-                        SettingsIconTile(symbol: "checkmark.seal.fill")
+                        SettingsIconTile(symbol: "checkmark.seal.fill", tint: SettingsTint.cyan)
                         Text("验证并保存")
                             .font(.system(size: 16))
                             .foregroundStyle(palette.textPrimary)
@@ -88,7 +90,7 @@ struct AccountPage: View {
                     Button {
                         removeKey()
                     } label: {
-                        SettingsRowBody(symbol: "trash", title: "移除密钥", destructive: true)
+                        SettingsRowBody(symbol: "trash", tint: SettingsTint.pink, title: "移除密钥", destructive: true)
                     }
                     .buttonStyle(.plain)
                 }
@@ -173,14 +175,14 @@ struct BrowsePage: View {
             SettingsSectionLabel(text: "浏览")
             SettingsCard {
                 SettingsSegmentedRow(
-                    symbol: "square.grid.2x2",
+                    symbol: "square.grid.2x2", tint: SettingsTint.cyan,
                     title: "每行显示",
                     options: [(2, "两列"), (3, "三列")],
                     selection: $settings.columns
                 )
                 SettingsDivider()
                 SettingsSwitchRow(
-                    symbol: "tag",
+                    symbol: "tag", tint: SettingsTint.amber,
                     title: "卡片角标",
                     isOn: $settings.showMeta
                 )
@@ -189,7 +191,7 @@ struct BrowsePage: View {
             SettingsSectionLabel(text: "外观")
             SettingsCard {
                 SettingsSegmentedRow(
-                    symbol: "circle.lefthalf.filled",
+                    symbol: "circle.lefthalf.filled", tint: SettingsTint.indigo,
                     title: "深浅模式",
                     options: ThemeMode.allCases.map { ($0, $0.label) },
                     selection: $settings.theme
@@ -202,7 +204,7 @@ struct BrowsePage: View {
                     onOpen(.favorites)
                 } label: {
                     SettingsRowBody(
-                        symbol: "heart",
+                        symbol: "heart", tint: SettingsTint.pink,
                         title: "我的收藏",
                         value: "\(favorites.count) 张",
                         chevron: true
@@ -231,13 +233,13 @@ struct StoragePage: View {
         SettingsPage("存储") {
             SettingsCard {
                 SettingsSwitchRow(
-                    symbol: "wifi",
+                    symbol: "wifi", tint: SettingsTint.blue,
                     title: "仅 Wi-Fi 下载",
                     isOn: $settings.wifiOnly
                 )
                 SettingsDivider()
                 SettingsRowBody(
-                    symbol: "photo.on.rectangle",
+                    symbol: "photo.on.rectangle", tint: SettingsTint.cyan,
                     title: "保存位置",
                     value: "照片 / Haven"
                 )
@@ -246,7 +248,7 @@ struct StoragePage: View {
                     clearCache()
                 } label: {
                     SettingsRowBody(
-                        symbol: "internaldrive",
+                        symbol: "internaldrive", tint: SettingsTint.indigo,
                         title: "图片缓存",
                         value: cacheSize.isEmpty ? "已清空" : cacheSize,
                         chevron: true
@@ -259,7 +261,7 @@ struct StoragePage: View {
                     toasts.show("搜索历史已清空")
                 } label: {
                     SettingsRowBody(
-                        symbol: "clock.arrow.circlepath",
+                        symbol: "clock.arrow.circlepath", tint: SettingsTint.amber,
                         title: "搜索历史",
                         value: "\(settings.recentSearches.count) 条",
                         chevron: true
@@ -271,7 +273,7 @@ struct StoragePage: View {
                     confirmClearFavorites = true
                 } label: {
                     SettingsRowBody(
-                        symbol: "trash",
+                        symbol: "trash", tint: SettingsTint.pink,
                         title: "清空收藏",
                         value: "\(favorites.count) 张",
                         destructive: true
@@ -332,13 +334,13 @@ struct AboutPage: View {
     var body: some View {
         SettingsPage("关于") {
             SettingsCard {
-                SettingsRowBody(symbol: "app.badge", title: "版本", value: versionLabel)
+                SettingsRowBody(symbol: "app.badge", tint: SettingsTint.blue, title: "版本", value: versionLabel)
                 SettingsDivider()
-                SettingsRowBody(symbol: "globe", title: "数据来源", value: "wallhaven.cc")
+                SettingsRowBody(symbol: "globe", tint: SettingsTint.cyan, title: "数据来源", value: "wallhaven.cc")
                 SettingsDivider()
                 Link(destination: URL(string: "https://github.com/kdjsn754/Haven-iOS")!) {
                     SettingsRowBody(
-                        symbol: "chevron.left.forwardslash.chevron.right",
+                        symbol: "chevron.left.forwardslash.chevron.right", tint: SettingsTint.neutral,
                         title: "源代码",
                         value: "GitHub",
                         chevron: true
