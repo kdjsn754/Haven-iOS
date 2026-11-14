@@ -283,7 +283,11 @@ struct MasonryColumns: View {
                             showMeta: showMeta,
                             downloaded: downloadedIds.contains(item.id)
                         )
-                        .onTapGesture { onOpen(item) }
+                        .onTapGesture {
+                            // 先塞进 LRU：详情页第一帧就能用真实数据渲染，不会白屏。
+                            WallpaperCache.shared.put(item)
+                            onOpen(item)
+                        }
                         .onLongPressGesture(minimumDuration: 0.35) { onLongPress(item) }
                         .onAppear {
                             if triggerIds.contains(item.id) { onReachEnd() }
