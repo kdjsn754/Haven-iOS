@@ -103,15 +103,16 @@ struct FilterState: Equatable {
             || !color.isEmpty
     }
 
-    /// 应用不做分级过滤：有密钥就始终 111（安全 + 粗略 + 限制级全给），
-    /// 没有密钥时 Wallhaven 只允许 100，填 111 会直接 401。
+    /// 应用不做分级过滤：始终 111（安全 + 粗略 + 限制级全给）。
+    /// 实测无密钥时接口也接受 111，只是悄悄把 nsfw 剔掉，不会报错；
+    /// 填了密钥之后同一份请求就会带回限制级内容。
     func toParams(query: String = "", apiKey: String = "") -> FeedParams {
         FeedParams(
             query: query,
             sorting: sorting,
             topRange: topRange,
             categories: categoryParam,
-            purity: apiKey.isEmpty ? "100" : "111",
+            purity: "111",
             resolution: resolution,
             ratio: ratio,
             color: color
